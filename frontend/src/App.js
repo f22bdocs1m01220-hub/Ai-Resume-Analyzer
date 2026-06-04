@@ -9,6 +9,8 @@ import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import AboutUs from './pages/AboutUs';
 import Analyze from './pages/Analyze';
+import Profile from './pages/Profile';
+import AnalysisView from './pages/AnalysisView';
 import './styles/global.css';
 import { getUser, setAuth, clearAuth } from './utils/auth';
 
@@ -54,6 +56,8 @@ function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/about" element={<AboutUs />} />
             <Route path="/analyze" element={<Analyze />} />
+            <Route path="/analysis/:id" element={<AnalysisView />} />
+            <Route path="/profile" element={<Profile onUpdateUser={(u) => setUser(u)} />} />
           </Routes>
         </AnimatePresence>
         <Footer />

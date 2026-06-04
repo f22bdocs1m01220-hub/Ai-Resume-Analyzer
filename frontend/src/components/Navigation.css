@@ -115,6 +115,14 @@
   font-weight: 600;
 }
 
+.user-name-link {
+  text-decoration: none;
+}
+
+.user-name-link .user-name {
+  cursor: pointer;
+}
+
 .btn-ghost { background: transparent; border: none; color: #f9fafb; }
 
 @media (max-width: 768px) {

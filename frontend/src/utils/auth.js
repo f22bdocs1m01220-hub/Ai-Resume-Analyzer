@@ -27,6 +27,10 @@ export function getUser() {
   }
 }
 
+export function setUser(user) {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
 export async function verifyToken() {
   const token = getToken();
   if (!token) return null;

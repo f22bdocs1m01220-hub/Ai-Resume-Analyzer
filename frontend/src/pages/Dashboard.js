@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import axios from 'axios';
+import { getToken } from '../utils/auth';
+import { useNavigate } from 'react-router-dom';
 import './Dashboard.css';
 
 function Dashboard() {
@@ -18,28 +21,84 @@ function Dashboard() {
     visible: { opacity: 1, y: 0, transition: { duration: 0.6 } }
   };
 
-  const dashboardStats = [
-    { label: 'Total Resumes Analyzed', value: '12', icon: '📊', color: '#6366f1' },
-    { label: 'Average Score', value: '76.5', icon: '⭐', color: '#ec4899' },
-    { label: 'Improvements Made', value: '48', icon: '📈', color: '#f59e0b' },
-    { label: 'Jobs Applied', value: '23', icon: '💼', color: '#10b981' }
-  ];
+  const [dashboardStats, setDashboardStats] = useState([ ]);
+  const [recentAnalyses, setRecentAnalyses] = useState([]);
+  const [skillsData, setSkillsData] = useState([]);
+  const [pollIntervalMs] = useState(5000);
+  const [selectedAnalysis, setSelectedAnalysis] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const navigate = useNavigate();
 
-  const recentAnalyses = [
-    { name: 'Resume_v1.pdf', date: '2026-05-20', score: 78, status: 'Completed' },
-    { name: 'Resume_v2.pdf', date: '2026-05-19', score: 82, status: 'Completed' },
-    { name: 'Resume_v3.pdf', date: '2026-05-18', score: 75, status: 'Completed' },
-    { name: 'Resume_v4.pdf', date: '2026-05-17', score: 80, status: 'Completed' }
-  ];
+  // helper to format timestamps (seconds or ms) and date strings
+  const formatDate = (v) => {
+    if (!v) return '—';
+    // if it's already a human-readable string (contains letters or colons), return it
+    if (typeof v === 'string' && /[a-zA-Z,:]/.test(v)) return v;
+    let n = Number(v);
+    if (Number.isNaN(n)) return String(v);
+    // detect seconds vs milliseconds
+    if (n < 1e12) n = n * 1000;
+    try {
+      const d = new Date(n);
+      return d.toLocaleString();
+    } catch (e) {
+      return String(v);
+    }
+  };
 
-  const skillsData = [
-    { skill: 'Python', level: 90 },
-    { skill: 'JavaScript', level: 85 },
-    { skill: 'React', level: 80 },
-    { skill: 'Communication', level: 88 },
-    { skill: 'Leadership', level: 75 },
-    { skill: 'Problem Solving', level: 92 }
-  ];
+  useEffect(() => {
+    let mounted = true;
+    const fetchData = async () => {
+      try {
+        const res = await axios.get('http://localhost:8000/api/dashboard');
+        if (!mounted) return;
+        if (res.data) {
+          setDashboardStats([
+            { label: 'Total Resumes Analyzed', value: res.data.total_resumes || 0, icon: '📊', color: '#6366f1' },
+            { label: 'Average Score', value: res.data.avg_score || 0, icon: '⭐', color: '#ec4899' },
+            { label: 'Recent Analyses', value: (res.data.recent || []).length, icon: '📈', color: '#f59e0b' },
+            { label: 'Top Skills', value: (res.data.top_skills || []).slice(0,3).map(s=>s.skill).join(', '), icon: '💼', color: '#10b981' }
+          ]);
+          setRecentAnalyses(res.data.recent || []);
+          setSkillsData((res.data.top_skills || []).map(s => ({ skill: s.skill, level: Math.min(95, 50 + s.count * 10) })));
+        }
+      } catch (e) {
+        console.error('Failed to load dashboard', e);
+      }
+    };
+
+    // initial load
+    fetchData();
+    // listen for explicit refresh events
+    window.addEventListener('dashboardRefresh', fetchData);
+    // poll for updates
+    const id = setInterval(fetchData, pollIntervalMs);
+    return () => {
+      mounted = false;
+      clearInterval(id);
+      window.removeEventListener('dashboardRefresh', fetchData);
+    };
+  }, [pollIntervalMs]);
+
+  // scroll to the analysis panel when selectedAnalysis changes
+  useEffect(() => {
+    if (selectedAnalysis) {
+      // wait for the DOM to render the panel, retry until present (max ~1s)
+      let tries = 0;
+      const tryScroll = () => {
+        const el = document.getElementById('analysis-panel');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return;
+        }
+        tries += 1;
+        if (tries < 8) {
+          setTimeout(tryScroll, 120);
+        }
+      };
+      tryScroll();
+    }
+  }, [selectedAnalysis]);
 
   return (
     <div className="dashboard-page">
@@ -60,34 +119,7 @@ function Dashboard() {
       </motion.section>
 
       {/* Stats Grid */}
-      <section className="stats-grid-section">
-        <div className="container">
-          <motion.div 
-            className="stats-grid"
-            variants={containerVariants}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-          >
-            {dashboardStats.map((stat, index) => (
-              <motion.div
-                key={index}
-                className="stat-widget"
-                variants={itemVariants}
-                whileHover={{ y: -5 }}
-              >
-                <div className="stat-header">
-                  <span className="stat-icon">{stat.icon}</span>
-                  <p className="stat-label">{stat.label}</p>
-                </div>
-                <div className="stat-value">{stat.value}</div>
-                <div className="stat-bar" style={{ backgroundColor: stat.color }} />
-              </motion.div>
-            ))}
-          </motion.div>
-        </div>
-      </section>
-
+     
       {/* Tabs Section */}
       <section className="dashboard-content">
         <div className="container">
@@ -220,8 +252,8 @@ function Dashboard() {
                         viewport={{ once: true }}
                         className="analysis-row"
                       >
-                        <td><span className="doc-icon">📄</span> {analysis.name}</td>
-                        <td>{analysis.date}</td>
+                        <td><span className="doc-icon">📄</span> {analysis.pdf_name || analysis.pdf}</td>
+                        <td>{formatDate(analysis.timestamp || analysis.date)}</td>
                         <td>
                           <motion.div 
                             className="score-badge"
@@ -230,12 +262,31 @@ function Dashboard() {
                             {analysis.score}
                           </motion.div>
                         </td>
-                        <td><span className="status-badge completed">{analysis.status}</span></td>
+                        <td><span className="status-badge completed">Completed</span></td>
                         <td>
                           <motion.button 
                             className="action-btn"
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
+                            onClick={async () => {
+                                // robust id handling and improved error reporting in modal
+                                const aid = analysis.id ?? analysis.ID ?? analysis.Id;
+                                console.debug('View clicked, analysis id:', aid);
+                                // ensure analyses tab active so table remains visible
+                                setActiveTab('analyses');
+                                if (!aid) {
+                                  setSelectedAnalysis({ error: 'Missing analysis id' });
+                                  setModalOpen(true);
+                                  return;
+                                }
+                                // navigate to the dedicated analysis page for a cleaner view
+                                if (aid) {
+                                  navigate(`/analysis/${aid}`);
+                                } else {
+                                  setSelectedAnalysis({ error: 'Missing analysis id' });
+                                  setModalOpen(true);
+                                }
+                              }}
                           >
                             View
                           </motion.button>
@@ -286,6 +337,89 @@ function Dashboard() {
           )}
         </div>
       </section>
+
+      {/* Simple Modal for analysis details */}
+      {modalOpen && selectedAnalysis && (
+        <div className="modal-backdrop" onClick={() => setModalOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Analysis Details</h3>
+              <button className="close-btn" onClick={() => setModalOpen(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              {selectedAnalysis.error ? (
+                <div>
+                  <p style={{ color: '#fecaca' }}><strong>Error:</strong> {selectedAnalysis.error}</p>
+                  {selectedAnalysis.trace && (
+                    <pre style={{ whiteSpace: 'pre-wrap', color: '#f3f4f6', fontSize: '0.8rem' }}>{selectedAnalysis.trace}</pre>
+                  )}
+
+                      {/* Bottom inline Analysis Panel (visible when an analysis is selected) */}
+                      {selectedAnalysis && (
+                        <section id="analysis-panel" className="analysis-panel">
+                          <div className="container">
+                            <div className="analysis-panel-inner">
+                              <div className="analysis-panel-header">
+                                <h2>Analysis Details</h2>
+                                <button className="close-btn" onClick={() => setSelectedAnalysis(null)}>✕</button>
+                              </div>
+                              {selectedAnalysis.error ? (
+                                <div className="analysis-error">{selectedAnalysis.error}
+                                  {selectedAnalysis.trace && <pre className="analysis-trace">{selectedAnalysis.trace}</pre>}
+                                </div>
+                              ) : (
+                                <div className="analysis-card">
+                                  <div className="analysis-row-top">
+                                    <div className="analysis-file"><strong>File:</strong> {selectedAnalysis.pdf_name || selectedAnalysis.pdf || '—'}</div>
+                                    <div className="analysis-score"><strong>Score:</strong> <span className="score-badge-inline">{selectedAnalysis.score ?? '—'}</span></div>
+                                  </div>
+                                  <div className="analysis-meta"><strong>Date:</strong> {formatDate(selectedAnalysis.timestamp || selectedAnalysis.date)}</div>
+                                  <div className="analysis-skills"><strong>Skills:</strong>
+                                    <div className="skill-badges">
+                                      {((selectedAnalysis.skills || selectedAnalysis.Actual_skills || '') + '')
+                                        .split(',')
+                                        .map(s => s.trim())
+                                        .filter(Boolean)
+                                        .map((s, i) => (
+                                          <span className="skill-badge" key={i}>{s}</span>
+                                        ))}
+                                      {(!selectedAnalysis.skills && !selectedAnalysis.Actual_skills) && (<span className="skill-none">No skills detected</span>)}
+                                    </div>
+                                  </div>
+                                  <div className="analysis-recommended"><strong>Recommended:</strong>
+                                    <ul>
+                                      {( (selectedAnalysis.recommended || selectedAnalysis.Recommended_skills || '') + '' )
+                                        .split(',')
+                                        .map(r => r.trim())
+                                        .filter(Boolean)
+                                        .map((r, i) => <li key={i}>{r}</li>)}
+                                      {(!(selectedAnalysis.recommended || selectedAnalysis.Recommended_skills)) && <li>None</li>}
+                                    </ul>
+                                  </div>
+                                  <div className="analysis-courses"><strong>Courses:</strong> {selectedAnalysis.courses || selectedAnalysis.Recommended_courses || '—'}</div>
+                                  <div className="analysis-raw"><strong>Raw data:</strong>
+                                    <pre style={{ color: '#c7d2fe', background: 'transparent', padding: '0.5rem 0' }}>{JSON.stringify(selectedAnalysis, null, 2)}</pre>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </section>
+                      )}
+                </div>
+              ) : (
+                <div>
+                  <p><strong>File:</strong> {selectedAnalysis.pdf_name}</p>
+                  <p><strong>Score:</strong> {selectedAnalysis.score}</p>
+                  <p><strong>Skills:</strong> {selectedAnalysis.skills}</p>
+                  <p><strong>Recommended:</strong> {selectedAnalysis.recommended || ''}</p>
+                  <p><strong>Courses:</strong> {selectedAnalysis.courses || ''}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Call to Action */}
       <section className="dashboard-cta">

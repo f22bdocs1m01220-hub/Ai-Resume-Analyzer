@@ -9,6 +9,7 @@ function Analyze() {
   const [file, setFile] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState(null);
+  const [showAllSkills, setShowAllSkills] = useState(false);
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -52,6 +53,12 @@ function Analyze() {
       alert('Analysis failed: ' + (err.response?.data?.error || err.message));
     } finally {
       setAnalyzing(false);
+      // notify dashboard to refresh immediately
+      try {
+        window.dispatchEvent(new CustomEvent('dashboardRefresh'));
+      } catch (e) {
+        // ignore if not available
+      }
     }
   };
 
@@ -262,12 +269,29 @@ function Analyze() {
                 <div className="detail-card">
                   <h3>🧠 Skills Extracted from Your Resume</h3>
                   <div className="skill-tags">
-                    {result.skills.map((skill) => (
-                      <div key={skill.name} className="skill-tag">
-                        <span>{skill.name}</span>
-                        <strong>{skill.level}%</strong>
-                      </div>
-                    ))}
+                    {(() => {
+                      const skills = Array.isArray(result.skills) ? result.skills.slice() : [];
+                      skills.sort((a,b) => (b.level || 0) - (a.level || 0));
+                      const visible = showAllSkills ? skills : skills.slice(0, 8);
+                      return (
+                        <>
+                          {visible.map((skill) => (
+                            <div key={skill.name} className="skill-tag">
+                              <div className="skill-left">
+                                <span className="skill-name">{skill.name}</span>
+                                {skill.origin && <small className="skill-origin">{skill.origin}</small>}
+                              </div>
+                              <strong>{skill.level}%</strong>
+                            </div>
+                          ))}
+                          {skills.length > 8 && (
+                            <button className="btn-show-more" onClick={() => setShowAllSkills(s => !s)}>
+                              {showAllSkills ? 'Show less' : `Show all ${skills.length}`}
+                            </button>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
 

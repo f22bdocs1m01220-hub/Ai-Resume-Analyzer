@@ -50,7 +50,9 @@ function Navigation({ user, onOpenLogin, onOpenSignup, onLogout }) {
           {user ? (
             <div className="user-info">
               <div className="user-avatar">{user.name.charAt(0).toUpperCase()}</div>
-              <div className="user-name">{user.name}</div>
+              <Link to="/profile" className="user-name-link">
+                <div className="user-name">{user.name}</div>
+              </Link>
               <button className="btn btn-ghost" onClick={onLogout}>Logout</button>
             </div>
           ) : (
