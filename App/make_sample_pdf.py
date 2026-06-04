@@ -1,0 +1,10 @@
+from fpdf import FPDF
+pdf = FPDF()
+pdf.add_page()
+pdf.set_font('Arial','',12)
+pdf.cell(0,10,'Name: Alice Example',ln=True)
+pdf.cell(0,10,'Email: alice@example.com',ln=True)
+pdf.ln(5)
+pdf.multi_cell(0,8,'Skills: Python, React, SQL, TensorFlow, Django, Docker, AWS, Communication')
+pdf.output('sample_skills_resume.pdf')
+print('Wrote sample_skills_resume.pdf')
